@@ -1,3 +1,7 @@
+# EKS backup output directories
+backups/
+*.tar.gz
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
