@@ -16,6 +16,9 @@
 set -euo pipefail
 IFS=$'\n\t'
 
+# Trap unexpected exits and show the line number
+trap 'echo -e "\n${RED}Script exited unexpectedly at line ${LINENO}. Run with --debug for details.${NC}" >&2' ERR
+
 VERSION="1.0.0"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -83,6 +86,12 @@ log_step() {
     [[ -n "${LOG_FILE}" ]] && echo "      → $1" >> "${LOG_FILE}"
 }
 
+log_verbose() {
+    [[ "${VERBOSE}" == "true" ]] || return 0
+    echo -e "    ${BLUE}·${NC} $1"
+    [[ -n "${LOG_FILE}" ]] && echo "[VERB] $1" >> "${LOG_FILE}"
+}
+
 # =============================================================================
 # Usage
 # =============================================================================
@@ -105,7 +114,8 @@ ${BOLD}OPTIONS:${NC}
   --skip-aws                  Skip AWS API calls (k8s resources only)
   --no-compress               Do not create .tar.gz archive
   --dry-run                   Show what would be backed up, no files written
-  -v, --verbose               Verbose output
+  -v, --verbose               Verbose output (show commands + file sizes)
+  --debug                     Trace every command with set -x (for debugging)
   -h, --help                  Show this help
 
 ${BOLD}EXAMPLES:${NC}
@@ -136,14 +146,17 @@ parse_args() {
             --no-compress)    COMPRESS=false; shift ;;
             --dry-run)        DRY_RUN=true; COMPRESS=false; shift ;;
             -v|--verbose)     VERBOSE=true; shift ;;
+            --debug)          set -x; shift ;;
             -h|--help)        usage; exit 0 ;;
             *) echo "Unknown option: $1"; usage; exit 1 ;;
         esac
     done
 
     if [[ -z "${CLUSTER_NAME}" ]]; then
-        echo -e "${RED}Error: --cluster is required${NC}" >&2
-        usage; exit 1
+        echo -e "${RED}Error: --cluster is required${NC}"
+        echo ""
+        usage
+        exit 1
     fi
 }
 
@@ -165,7 +178,8 @@ check_dependencies() {
     done
 
     if [[ ${#missing[@]} -gt 0 ]]; then
-        echo -e "${RED}Missing dependencies: ${missing[*]}${NC}" >&2
+        echo -e "${RED}Missing required tools: ${missing[*]}${NC}"
+        echo -e "${YELLOW}Install them and try again.${NC}"
         exit 1
     fi
 }
@@ -175,8 +189,9 @@ check_cluster_access() {
 
     if [[ "${DRY_RUN}" == "false" ]] && [[ "${SKIP_AWS}" == "false" ]]; then
         if ! aws eks describe-cluster --name "${CLUSTER_NAME}" --region "${REGION}" &>/dev/null; then
-            echo -e "${RED}Cannot access EKS cluster '${CLUSTER_NAME}' in ${REGION}${NC}" >&2
-            echo -e "${YELLOW}Check your AWS credentials and cluster name.${NC}" >&2
+            echo -e "${RED}Cannot access EKS cluster '${CLUSTER_NAME}' in ${REGION}${NC}"
+            echo -e "${YELLOW}Check your AWS credentials and cluster name.${NC}"
+            echo -e "${YELLOW}Test: aws sts get-caller-identity${NC}"
             exit 1
         fi
         log_step "AWS EKS access OK"
@@ -184,8 +199,8 @@ check_cluster_access() {
 
     if [[ "${DRY_RUN}" == "false" ]]; then
         if ! kubectl cluster-info &>/dev/null; then
-            echo -e "${RED}Cannot connect to Kubernetes API${NC}" >&2
-            echo -e "${YELLOW}Run: aws eks update-kubeconfig --name ${CLUSTER_NAME} --region ${REGION}${NC}" >&2
+            echo -e "${RED}Cannot connect to Kubernetes API${NC}"
+            echo -e "${YELLOW}Run: aws eks update-kubeconfig --name ${CLUSTER_NAME} --region ${REGION}${NC}"
             exit 1
         fi
         local server
@@ -222,14 +237,17 @@ save_k8s() {
 
     [[ "${DRY_RUN}" == "true" ]] && { log_step "(dry-run) kubectl get ${resource}"; return 0; }
 
+    log_verbose "kubectl get ${resource} ${flags[*]+"${flags[*]}"} -o yaml → $(basename "${output_file}")"
     mkdir -p "$(dirname "${output_file}")"
 
     local raw_output
-    if raw_output="$(kubectl get "${resource}" "${flags[@]}" -o yaml 2>/dev/null)"; then
+    # Use "${flags[@]+"${flags[@]}"}" to safely expand possibly-empty array with set -u
+    if raw_output="$(kubectl get "${resource}" "${flags[@]+"${flags[@]}"}" -o yaml 2>/dev/null)"; then
         echo "${raw_output}" > "${output_file}"
         local count
-        count="$(kubectl get "${resource}" "${flags[@]}" --no-headers 2>/dev/null | grep -c . || echo 0)"
+        count="$(kubectl get "${resource}" "${flags[@]+"${flags[@]}"}" --no-headers 2>/dev/null | grep -c . || echo 0)"
         log_info "k8s/${resource} (${count}) → $(realpath --relative-to="${BACKUP_DIR}" "${output_file}")"
+        log_verbose "File size: $(du -sh "${output_file}" | cut -f1)"
     else
         log_warn "k8s/${resource}: not found or no access"
     fi
@@ -244,10 +262,12 @@ save_aws() {
     [[ "${DRY_RUN}" == "true" ]] && { log_step "(dry-run) ${*}"; return 0; }
     [[ "${SKIP_AWS}" == "true" ]] && { log_warn "${label}: skipped (--skip-aws)"; return 0; }
 
+    log_verbose "aws ${*:1} → $(basename "${output_file}")"
     mkdir -p "$(dirname "${output_file}")"
 
     if "$@" > "${output_file}" 2>/dev/null; then
         log_info "${label} → $(realpath --relative-to="${BACKUP_DIR}" "${output_file}")"
+        log_verbose "File size: $(du -sh "${output_file}" | cut -f1)"
     else
         log_warn "${label}: failed or empty"
         rm -f "${output_file}"
@@ -990,6 +1010,9 @@ print_summary() {
 # Main
 # =============================================================================
 main() {
+    echo -e "${BOLD}${BLUE}EKS Fargate Backup v${VERSION}${NC}"
+    echo -e "Tip: run with ${CYAN}--debug${NC} to trace every command, ${CYAN}--dry-run${NC} to preview.\n"
+
     parse_args "$@"
 
     log_header "EKS Fargate Backup v${VERSION}"
