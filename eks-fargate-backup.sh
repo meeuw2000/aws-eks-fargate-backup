@@ -25,7 +25,7 @@ BLUE='\033[0;34m'; CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
 
 # ------------- Defaults -------------------------------------------------------
 CLUSTER_NAME=""
-REGION="${AWS_DEFAULT_REGION:-eu-west-1}"
+REGION="${AWS_DEFAULT_REGION:-eu-central-1}"
 OUTPUT_BASE_DIR="${SCRIPT_DIR}/backups"
 TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
 BACKUP_DIR=""
@@ -109,7 +109,7 @@ ${BOLD}OPTIONS:${NC}
   -h, --help                  Show this help
 
 ${BOLD}EXAMPLES:${NC}
-  $(basename "$0") --cluster my-cluster --region eu-west-1
+  $(basename "$0") --cluster my-cluster --region eu-central-1
   $(basename "$0") --cluster my-cluster --skip-secrets --no-compress
   $(basename "$0") --cluster my-cluster --dry-run
 
