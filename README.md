@@ -143,10 +143,10 @@ cd aws-eks-fargate-backup
 chmod +x eks-fargate-backup.sh eks-fargate-restore.sh
 
 # Volledige backup (inclusief secrets)
-./eks-fargate-backup.sh --cluster mijn-cluster --region eu-west-1
+./eks-fargate-backup.sh --cluster mijn-cluster --region eu-central-1
 
 # Backup zonder secrets
-./eks-fargate-backup.sh --cluster mijn-cluster --region eu-west-1 --skip-secrets
+./eks-fargate-backup.sh --cluster mijn-cluster --region eu-central-1 --skip-secrets
 
 # Dry-run: zie wat er gebackupt wordt zonder te schrijven
 ./eks-fargate-backup.sh --cluster mijn-cluster --dry-run
@@ -166,7 +166,7 @@ chmod +x eks-fargate-backup.sh eks-fargate-restore.sh
 | Optie | Beschrijving | Default |
 |-------|-------------|---------|
 | `-c, --cluster <naam>` | **Verplicht.** EKS cluster naam | — |
-| `-r, --region <regio>` | AWS regio | `eu-west-1` of `$AWS_DEFAULT_REGION` |
+| `-r, --region <regio>` | AWS regio | `eu-central-1` of `$AWS_DEFAULT_REGION` |
 | `-o, --output <dir>` | Basis output directory | `./backups` |
 | `--skip-secrets` | Sla Kubernetes Secrets over | false |
 | `--skip-helm` | Sla Helm releases over | false |
@@ -181,19 +181,19 @@ chmod +x eks-fargate-backup.sh eks-fargate-restore.sh
 
 ```bash
 # Standaard backup
-./eks-fargate-backup.sh --cluster productie --region eu-west-1
+./eks-fargate-backup.sh --cluster productie --region eu-central-1
 
 # Backup zonder secrets en Helm
 ./eks-fargate-backup.sh \
   --cluster productie \
-  --region eu-west-1 \
+  --region eu-central-1 \
   --skip-secrets \
   --skip-helm
 
 # Backup naar specifieke directory
 ./eks-fargate-backup.sh \
   --cluster productie \
-  --region eu-west-1 \
+  --region eu-central-1 \
   --output /mnt/backup/eks
 
 # Alleen Kubernetes resources (geen AWS API calls)
@@ -465,7 +465,7 @@ aws eks create-addon \
   --cluster-name <naam> \
   --addon-name kube-proxy \
   --addon-version <versie> \
-  --region eu-west-1
+  --region eu-central-1
 ```
 
 ### CoreDNS
@@ -519,7 +519,7 @@ cat backups/<cluster>/cluster/fargate-profiles/fp-default.json | jq '.fargatePro
 #    (Let op: EKS downgrade is niet direct mogelijk — maak nieuw cluster)
 
 # 2. Update kubeconfig
-aws eks update-kubeconfig --name <cluster> --region eu-west-1
+aws eks update-kubeconfig --name <cluster> --region eu-central-1
 
 # 3. Herstel in volgorde
 ./eks-fargate-restore.sh --backup-dir backups/<cluster>_<ts> --dry-run
@@ -551,7 +551,7 @@ aws eks create-fargate-profile \
   --selectors namespace=default
 
 # 3. Update kubeconfig
-aws eks update-kubeconfig --name nieuw-cluster --region eu-west-1
+aws eks update-kubeconfig --name nieuw-cluster --region eu-central-1
 
 # 4. Installeer EKS managed add-ons
 aws eks create-addon --cluster-name nieuw-cluster --addon-name coredns --addon-version v1.11.1-eksbuild.4
@@ -641,10 +641,10 @@ aws s3 cp productie_20240101_120000.tar.gz \
 aws sts get-caller-identity
 
 # Update kubeconfig
-aws eks update-kubeconfig --name <cluster> --region eu-west-1
+aws eks update-kubeconfig --name <cluster> --region eu-central-1
 
 # Controleer cluster status
-aws eks describe-cluster --name <cluster> --region eu-west-1 | jq '.cluster.status'
+aws eks describe-cluster --name <cluster> --region eu-central-1 | jq '.cluster.status'
 ```
 
 ### "kubectl: connection refused"
@@ -654,7 +654,7 @@ kubectl config current-context
 kubectl config get-contexts
 
 # Zet naar juiste context
-kubectl config use-context arn:aws:eks:eu-west-1:<account>:cluster/<naam>
+kubectl config use-context arn:aws:eks:eu-central-1:<account>:cluster/<naam>
 ```
 
 ### Pods blijven Pending na restore
@@ -663,7 +663,7 @@ kubectl config use-context arn:aws:eks:eu-west-1:<account>:cluster/<naam>
 kubectl describe pod <pod> | grep -A5 Events
 
 # Fargate profiles beschikbaar?
-aws eks list-fargate-profiles --cluster-name <naam> --region eu-west-1
+aws eks list-fargate-profiles --cluster-name <naam> --region eu-central-1
 
 # Voeg namespace toe aan Fargate profiel als het er niet staat
 aws eks create-fargate-profile \
