@@ -83,6 +83,12 @@ log_step() {
     [[ -n "${LOG_FILE}" ]] && echo "      → $1" >> "${LOG_FILE}"
 }
 
+log_verbose() {
+    [[ "${VERBOSE}" == "true" ]] || return 0
+    echo -e "    ${BLUE}·${NC} $1"
+    [[ -n "${LOG_FILE}" ]] && echo "[VERB] $1" >> "${LOG_FILE}"
+}
+
 # =============================================================================
 # Usage
 # =============================================================================
@@ -222,6 +228,7 @@ save_k8s() {
 
     [[ "${DRY_RUN}" == "true" ]] && { log_step "(dry-run) kubectl get ${resource}"; return 0; }
 
+    log_verbose "kubectl get ${resource} ${flags[*]+"${flags[*]}"} -o yaml → $(basename "${output_file}")"
     mkdir -p "$(dirname "${output_file}")"
 
     local raw_output
@@ -230,6 +237,7 @@ save_k8s() {
         local count
         count="$(kubectl get "${resource}" "${flags[@]}" --no-headers 2>/dev/null | grep -c . || echo 0)"
         log_info "k8s/${resource} (${count}) → $(realpath --relative-to="${BACKUP_DIR}" "${output_file}")"
+        log_verbose "File size: $(du -sh "${output_file}" | cut -f1)"
     else
         log_warn "k8s/${resource}: not found or no access"
     fi
@@ -244,10 +252,12 @@ save_aws() {
     [[ "${DRY_RUN}" == "true" ]] && { log_step "(dry-run) ${*}"; return 0; }
     [[ "${SKIP_AWS}" == "true" ]] && { log_warn "${label}: skipped (--skip-aws)"; return 0; }
 
+    log_verbose "aws ${*:1} → $(basename "${output_file}")"
     mkdir -p "$(dirname "${output_file}")"
 
     if "$@" > "${output_file}" 2>/dev/null; then
         log_info "${label} → $(realpath --relative-to="${BACKUP_DIR}" "${output_file}")"
+        log_verbose "File size: $(du -sh "${output_file}" | cut -f1)"
     else
         log_warn "${label}: failed or empty"
         rm -f "${output_file}"
